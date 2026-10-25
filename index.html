@@ -146,8 +146,8 @@
 const TAU = Math.PI * 2, mod = (a, m) => ((a % m) + m) % m, sleep = ms => new Promise(r => setTimeout(r, ms));
 function app() {
   return {
-    input: 'Alice, Bob, Charlie, David, Emma',
-    numGroups: 3, maxMembers: 3, method: 'sequential', removeAfter: true, style: 'rounded', speed: 3, sidebar: true,
+    input: 'Alice, Bob, Charlie, David, Emma, Peter',
+    numGroups: 2, maxMembers: 3, method: 'sequential', removeAfter: true, style: 'rounded', speed: 3, sidebar: true,
     speedLabels: ['10s', '7s', '5s', '3.5s', '2s'], durations: [10000, 7000, 5000, 3500, 2000],
     methods: [{ id: 'sequential', label: 'Sequential' }, { id: 'roundrobin', label: 'Round Robin' }, { id: 'random', label: 'Random' }],
     styles: [{ id: 'horizontal', label: 'Horizontal' }, { id: 'vertical', label: 'Vertical' }, { id: 'rounded', label: 'Rounded' }],
