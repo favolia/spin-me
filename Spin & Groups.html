@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spin & Groups</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<style>
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  [x-cloak] { display: none !important; }
+  .spinbtn { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input[type=range] { accent-color: #33576b; }
+</style>
+</head>
+<body class="min-h-screen bg-[#f7f6f3] text-stone-800 antialiased dark:bg-stone-950 dark:text-stone-200" x-data="app()" x-init="init()" @keydown.escape.window="dialog.open=false">
+
+<div class="mx-auto max-w-6xl px-5 py-8 sm:px-8">
+  <header class="mb-8 flex items-center justify-between">
+    <h1 class="text-lg font-medium tracking-tight">Spin <span class="text-stone-400">&</span> Groups</h1>
+    <button @click="sidebar=!sidebar" :aria-expanded="sidebar" class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-600 transition hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-900">
+      Settings <span class="ml-1 inline-block text-xs transition-transform" :class="sidebar ? 'rotate-180' : ''">▾</span>
+    </button>
+  </header>
+
+  <div class="flex flex-col gap-8 lg:flex-row">
+    <!-- Sidebar -->
+    <aside x-show="sidebar" x-cloak x-transition.opacity class="w-full shrink-0 space-y-6 rounded-lg border border-stone-200 bg-white p-5 text-sm dark:border-stone-800 dark:bg-stone-900 lg:w-60 lg:self-start">
+      <div>
+        <div class="mb-2 text-xs uppercase tracking-widest text-stone-400">Groups</div>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="text-xs text-stone-500">Groups
+            <input type="number" min="1" max="100" x-model.number="numGroups" @change="clamp()" class="mt-1 w-full rounded-md border border-stone-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-stone-500 dark:border-stone-700">
+          </label>
+          <label class="text-xs text-stone-500">Max members
+            <input type="number" min="1" max="1000" x-model.number="maxMembers" @change="clamp()" class="mt-1 w-full rounded-md border border-stone-300 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-stone-500 dark:border-stone-700">
+          </label>
+        </div>
+        <div class="mt-3 text-xs text-stone-500">Method</div>
+        <div class="mt-1 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-stone-300 text-xs dark:border-stone-700">
+          <template x-for="m in methods" :key="m.id">
+            <button @click="method=m.id" :class="method===m.id ? 'bg-[#33576b] text-white' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800'" class="px-1 py-1.5 transition" x-text="m.label"></button>
+          </template>
+        </div>
+      </div>
+      <div>
+        <div class="mb-2 text-xs uppercase tracking-widest text-stone-400">Spin</div>
+        <label class="flex cursor-pointer items-center gap-2"><input type="checkbox" x-model="removeAfter" class="h-4 w-4 rounded"> Remove after selected</label>
+        <div class="mt-3 text-xs text-stone-500">Style</div>
+        <div class="mt-1 grid grid-cols-3 gap-px overflow-hidden rounded-md border border-stone-300 text-xs dark:border-stone-700">
+          <template x-for="s in styles" :key="s.id">
+            <button @click="style=s.id" :class="style===s.id ? 'bg-[#33576b] text-white' : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800'" class="px-1 py-1.5 transition" x-text="s.label"></button>
+          </template>
+        </div>
+        <div class="mt-3 flex justify-between text-xs text-stone-500"><span>Speed</span><span x-text="speedLabels[speed-1]"></span></div>
+        <input type="range" min="1" max="5" step="1" x-model.number="speed" class="mt-1 w-full">
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="min-w-0 flex-1 space-y-6">
+      <div class="grid gap-6 md:grid-cols-5">
+        <!-- Names -->
+        <section class="rounded-lg border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900 md:col-span-2">
+          <div class="mb-3 flex items-baseline justify-between">
+            <h2 class="text-xs uppercase tracking-widest text-stone-400">Names</h2>
+            <span class="text-xs text-stone-400" x-text="entries.length"></span>
+          </div>
+          <textarea x-model="input" rows="8" placeholder="Alice, Bob, Charlie"
+            class="w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm outline-none focus:border-stone-400 dark:border-stone-700 dark:bg-stone-950"></textarea>
+          <div class="mt-3 flex gap-4 text-sm text-stone-500">
+            <button @click="input='Alice, Bob, Charlie, David, Emma'" class="underline-offset-4 hover:underline">Example</button>
+            <button @click="clearAll()" :disabled="!input" class="underline-offset-4 hover:underline disabled:opacity-30">Clear</button>
+          </div>
+        </section>
+
+        <!-- Spin -->
+        <section class="rounded-lg border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900 md:col-span-3">
+          <h2 class="mb-4 text-xs uppercase tracking-widest text-stone-400">Spin</h2>
+          <div class="relative mx-auto" :class="style==='rounded' ? 'max-w-sm' : style==='vertical' ? 'max-w-[15rem]' : 'max-w-xl'">
+            <div x-show="style==='rounded'" class="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1.5">
+              <svg width="26" height="32" viewBox="0 0 26 32"><path d="M13 32 L1 6 Q13 -3 25 6 Z" fill="#c0503a"/></svg>
+            </div>
+            <canvas x-ref="cv" :width="dims.w" :height="dims.h" class="w-full" :class="style==='rounded' ? 'rounded-full' : 'rounded-md border border-stone-200 dark:border-stone-800'"></canvas>
+          </div>
+
+          <div class="mt-5 flex min-h-[3rem] flex-col items-center justify-center text-center">
+            <div class="text-xl font-medium" x-text="result ? result.title : ''"></div>
+            <div class="text-sm text-stone-500" x-text="result ? result.sub : (entries.length ? waiting() + ' waiting' : 'Add names to begin')"></div>
+          </div>
+
+          <div class="mt-4 flex gap-3">
+            <button class="spinbtn relative flex-1 overflow-hidden rounded-md px-4 py-3 text-sm font-medium text-white transition active:scale-[0.98]"
+              :class="autoRunning ? 'bg-[#c0503a]' : 'bg-[#33576b] hover:bg-[#2b4a5b]'"
+              @pointerdown.prevent="btnDown($event)" @pointerup="btnUp()" @pointercancel="btnCancel()" @pointerleave="btnCancel()" @contextmenu.prevent
+              @keydown.enter.prevent="!autoRunning && manual()" @keydown.space.prevent="!autoRunning && manual()">
+              <span class="absolute inset-y-0 left-0 bg-white/20" :style="holding ? 'width:100%;transition:width 450ms linear' : 'width:0'"></span>
+              <span class="relative" x-text="autoRunning ? 'Stop' : 'Spin'"></span>
+            </button>
+            <button @click="instant()" class="rounded-md border border-stone-300 px-5 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-100 active:scale-[0.98] dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800">Instant</button>
+          </div>
+          <p class="mt-2 text-center text-xs text-stone-400">Tap to spin · hold for auto</p>
+        </section>
+      </div>
+
+      <!-- Groups -->
+      <section class="rounded-lg border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+        <div class="mb-4 flex items-baseline justify-between">
+          <h2 class="text-xs uppercase tracking-widest text-stone-400">Groups <span class="ml-2 normal-case tracking-normal" x-text="assignedCount() + ' / ' + capacity()"></span></h2>
+          <button @click="resetGroups()" :disabled="!assignedCount()" class="text-sm text-stone-500 underline-offset-4 hover:underline disabled:opacity-30">Reset</button>
+        </div>
+        <p x-show="entries.length > capacity()" x-cloak class="mb-4 text-sm text-[#b0893a]"><span x-text="entries.length - capacity()"></span> name(s) won’t fit.</p>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <template x-for="(g, gi) in groups" :key="gi">
+            <div class="rounded-md border border-stone-200 p-4 dark:border-stone-800">
+              <div class="mb-2 flex items-center justify-between text-sm">
+                <span class="flex items-center gap-2 font-medium"><span class="h-2 w-2 rounded-full" :style="'background:' + color(gi)"></span><span x-text="'Group ' + (gi+1)"></span></span>
+                <span class="text-xs" :class="g.length>=maxMembers ? 'text-[#c0503a]' : 'text-stone-400'" x-text="g.length + '/' + maxMembers"></span>
+              </div>
+              <ul class="space-y-1 text-sm">
+                <template x-for="e in g" :key="e.id"><li x-transition class="truncate border-t border-stone-100 pt-1 dark:border-stone-800" x-text="e.name"></li></template>
+              </ul>
+              <p x-show="!g.length" class="text-xs text-stone-300 dark:text-stone-600">—</p>
+            </div>
+          </template>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div x-show="dialog.open" x-cloak x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4" @click.self="dialog.open=false">
+  <div class="w-full max-w-xs rounded-lg bg-white p-6 text-center dark:bg-stone-900">
+    <h3 class="font-medium" x-text="dialog.title"></h3>
+    <p class="mt-1 text-sm text-stone-500" x-text="dialog.message"></p>
+    <div class="mt-5 flex justify-center gap-2">
+      <button x-show="dialog.confirm" @click="dialog.confirm(); dialog.open=false" class="rounded-md bg-[#c0503a] px-4 py-2 text-sm text-white" x-text="dialog.confirmLabel"></button>
+      <button @click="dialog.open=false" class="rounded-md border border-stone-300 px-4 py-2 text-sm dark:border-stone-700" x-text="dialog.confirm ? 'Cancel' : 'OK'"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TAU = Math.PI * 2, mod = (a, m) => ((a % m) + m) % m, sleep = ms => new Promise(r => setTimeout(r, ms));
+function app() {
+  return {
+    input: 'Alice, Bob, Charlie, David, Emma',
+    numGroups: 3, maxMembers: 3, method: 'sequential', removeAfter: true, style: 'rounded', speed: 3, sidebar: true,
+    speedLabels: ['10s', '7s', '5s', '3.5s', '2s'], durations: [10000, 7000, 5000, 3500, 2000],
+    methods: [{ id: 'sequential', label: 'Sequential' }, { id: 'roundrobin', label: 'Round Robin' }, { id: 'random', label: 'Random' }],
+    styles: [{ id: 'horizontal', label: 'Horizontal' }, { id: 'vertical', label: 'Vertical' }, { id: 'rounded', label: 'Rounded' }],
+    palette: ['#3f5f73', '#b0893a', '#6f8a6b', '#9a7b68', '#6b8794', '#8a6f8f', '#5c7a73', '#7b8a99'],
+    entries: [], groups: [], rr: 0, rotation: 0, pos: 0, token: 0,
+    spinning: false, autoRunning: false, holding: false, result: null, holdTimer: null, holdFired: false, ignoreUp: false,
+    dialog: { open: false, title: '', message: '', confirm: null, confirmLabel: '' },
+
+    get names() { return this.input.split(',').map(s => s.trim()).filter(Boolean); },
+    get items() { return this.entries.filter(e => !this.removeAfter || e.group < 0); },
+    get dims() { return this.style === 'rounded' ? { w: 640, h: 640 } : this.style === 'vertical' ? { w: 360, h: 520 } : { w: 900, h: 190 }; },
+    color(i) { return this.palette[i % this.palette.length]; },
+    validSettings() { return Number.isInteger(this.numGroups) && this.numGroups >= 1 && this.numGroups <= 100 && Number.isInteger(this.maxMembers) && this.maxMembers >= 1 && this.maxMembers <= 1000; },
+    capacity() { return this.validSettings() ? this.numGroups * this.maxMembers : 0; },
+
+    init() {
+      this.sidebar = window.innerWidth >= 1024;
+      this.rebuild();
+      this.$watch('input', () => this.rebuild());
+      this.$watch('numGroups', () => this.resize());
+      this.$watch('maxMembers', () => this.resize());
+      this.$watch('style', () => this.$nextTick(() => this.draw()));
+      this.$watch('removeAfter', () => { this.pos = 0; this.rotation = 0; this.draw(); });
+      this.$nextTick(() => this.draw());
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.draw());
+    },
+    showDialog(o) { this.dialog = Object.assign({ open: true, title: '', message: '', confirm: null, confirmLabel: 'Confirm' }, o); },
+    clearAll() { this.showDialog({ title: 'Clear the list?', message: 'All names and group assignments are removed.', confirm: () => { this.input = ''; }, confirmLabel: 'Clear' }); },
+    clamp() {
+      const c = (v, d, max) => Number.isFinite(v) ? Math.min(max, Math.max(1, Math.round(v))) : d;
+      this.numGroups = c(this.numGroups, 3, 100); this.maxMembers = c(this.maxMembers, 3, 1000);
+    },
+
+    /* ---------- state ---------- */
+    stopAll() { this.token++; this.autoRunning = false; this.spinning = false; },
+    rebuild() {
+      this.stopAll();
+      this.entries = this.names.map((name, id) => ({ id, name, group: -1 }));
+      this.groups = Array.from({ length: this.validSettings() ? this.numGroups : 0 }, () => []);
+      this.rr = 0; this.result = null; this.pos = 0; this.rotation = 0;
+      this.$nextTick(() => this.draw());
+    },
+    resize() {
+      if (!this.validSettings()) return;
+      this.stopAll();
+      while (this.groups.length > this.numGroups) this.groups.pop().forEach(e => e.group = -1);
+      while (this.groups.length < this.numGroups) this.groups.push([]);
+      this.groups.forEach(a => { while (a.length > this.maxMembers) a.pop().group = -1; });
+      this.rr = 0; this.draw();
+    },
+    resetGroups() {
+      this.stopAll(); this.entries.forEach(e => e.group = -1);
+      this.groups = Array.from({ length: this.numGroups }, () => []);
+      this.rr = 0; this.result = null; this.pos = 0; this.rotation = 0; this.draw();
+    },
+    assignedCount() { return this.groups.reduce((s, g) => s + g.length, 0); },
+    waiting() { return this.entries.filter(e => e.group < 0).length; },
+    blocked() {
+      if (!this.entries.length) return { title: 'Nothing to spin', message: 'Add at least one name first.' };
+      if (!this.validSettings()) return { title: 'Check settings', message: 'Groups: 1–100. Max members: 1–1000.' };
+      if (!this.waiting()) return { title: 'Everyone is placed', message: 'Reset the groups to start again.' };
+      if (this.groups.every(a => a.length >= this.maxMembers)) return { title: 'All groups are full', message: 'Raise Groups or Max members, or reset.' };
+      return null;
+    },
+
+    /* ---------- assignment ---------- */
+    pickGroup() {
+      const g = this.groups.length, m = this.maxMembers;
+      const open = this.groups.map((a, i) => a.length < m ? i : -1).filter(i => i >= 0);
+      if (!open.length) return -1;
+      if (this.method === 'sequential') return open[0];
+      if (this.method === 'random') return open[Math.floor(Math.random() * open.length)];
+      for (let k = 0; k < g; k++) { const c = (this.rr + k) % g; if (this.groups[c].length < m) { this.rr = (c + 1) % g; return c; } }
+      return -1;
+    },
+    assign(entry) {
+      if (entry.group >= 0) return -1;
+      const gi = this.pickGroup(); if (gi < 0) return -1;
+      entry.group = gi; this.groups[gi].push(entry); return gi;
+    },
+
+    /* ---------- spin button ---------- */
+    btnDown() {
+      this.ignoreUp = false; this.holdFired = false;
+      if (this.autoRunning) { this.stopAll(); this.ignoreUp = true; return; }
+      if (this.spinning) { this.ignoreUp = true; return; }
+      this.holding = true;
+      this.holdTimer = setTimeout(() => { this.holding = false; this.holdFired = true; this.startAuto(); }, 450);
+    },
+    btnUp() {
+      clearTimeout(this.holdTimer); this.holding = false;
+      if (this.ignoreUp || this.holdFired) { this.ignoreUp = false; this.holdFired = false; return; }
+      this.manual();
+    },
+    btnCancel() { if (!this.holdFired) { clearTimeout(this.holdTimer); this.holding = false; this.ignoreUp = true; } },
+    async manual() {
+      if (this.spinning || this.autoRunning) return;
+      const b = this.blocked(); if (b) return this.showDialog(b);
+      await this.spinOnce();
+    },
+    async startAuto() {
+      if (this.spinning || this.autoRunning) return;
+      const b = this.blocked(); if (b) return this.showDialog(b);
+      this.autoRunning = true;
+      const mine = ++this.token;
+      while (this.autoRunning && this.token === mine && !this.blocked()) {
+        if (!(await this.spinOnce(mine))) break;
+        await sleep(350);
+      }
+      if (this.token === mine) {
+        this.autoRunning = false;
+        const left = this.waiting();
+        this.result = { title: left ? 'Stopped' : 'Done', sub: left ? left + ' waiting' : 'All names placed' };
+      }
+    },
+    instant() {
+      if (this.spinning || this.autoRunning) this.stopAll();
+      const b = this.blocked(); if (b) return this.showDialog(b);
+      const list = this.entries.filter(e => e.group < 0).sort(() => Math.random() - 0.5);
+      let placed = 0;
+      for (const e of list) { if (this.assign(e) < 0) break; placed++; }
+      const left = this.waiting();
+      this.result = { title: placed + ' placed', sub: left ? left + ' waiting' : 'All names placed' };
+      this.pos = 0; this.rotation = 0; this.draw();
+    },
+
+    /* ---------- one animated spin ---------- */
+    async spinOnce(tok) {
+      const list = this.items, n = list.length;
+      const cand = list.map((e, i) => e.group < 0 ? i : -1).filter(i => i >= 0);
+      if (!cand.length) return false;
+      const idx = cand[Math.floor(Math.random() * cand.length)];
+      const strip = this.style !== 'rounded', jit = (Math.random() - 0.5) * 0.6;
+      const start = strip ? this.pos : this.rotation;
+      const final = strip ? idx + jit : 1.5 * Math.PI - (idx + 0.5 + jit) * (TAU / n);
+      const unit = strip ? n : TAU, loops = strip ? 3 + Math.floor(Math.random() * 2) : 5 + Math.floor(Math.random() * 3);
+      const delta = mod(final - start, unit) + unit * loops;
+      const my = tok || ++this.token;
+      this.spinning = true; this.result = null;
+      const dur = this.durations[this.speed - 1], t0 = performance.now();
+      await new Promise(res => {
+        const step = now => {
+          if (this.token !== my) return res();
+          const p = Math.min(1, (now - t0) / dur), v = start + delta * (1 - Math.pow(1 - p, 4));
+          if (strip) this.pos = v; else this.rotation = v;
+          this.draw(); p < 1 ? requestAnimationFrame(step) : res();
+        };
+        requestAnimationFrame(step);
+      });
+      if (this.token !== my) return false;
+      this.spinning = false;
+      const entry = list[idx], gi = this.assign(entry);
+      if (gi >= 0) this.result = { title: entry.name, sub: 'Group ' + (gi + 1) };
+      if (this.removeAfter) { this.pos = 0; this.rotation = 0; } else { this.pos = mod(this.pos, n); this.rotation = mod(this.rotation, TAU); }
+      this.draw();
+      return gi >= 0;
+    },
+
+    /* ---------- drawing ---------- */
+    fit(ctx, t, max) {
+      if (ctx.measureText(t).width <= max) return t;
+      while (t.length > 1 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
+      return t + '…';
+    },
+    draw() {
+      const c = this.$refs.cv; if (!c) return;
+      const ctx = c.getContext('2d'), W = c.width, H = c.height, names = this.items.map(e => e.name), n = names.length;
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const bg = dark ? '#1c1917' : '#f7f6f3', NEEDLE = '#c0503a';
+      ctx.clearRect(0, 0, W, H);
+      if (!n) {
+        ctx.fillStyle = dark ? '#292524' : '#ecebe6';
+        if (this.style === 'rounded') { ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2 - 8, 0, TAU); ctx.fill(); } else ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#a8a29e'; ctx.font = '500 24px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(this.entries.length ? 'All names placed' : 'Add names', W / 2, H / 2); return;
+      }
+      const col = i => (n > 1 && n % this.palette.length === 1 && i === n - 1) ? '#a8a29e' : this.palette[i % this.palette.length];
+      if (this.style === 'rounded') {
+        const R = W / 2 - 8, seg = TAU / n;
+        ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(this.rotation);
+        for (let i = 0; i < n; i++) {
+          const a = i * seg;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, a, a + seg); ctx.closePath();
+          ctx.fillStyle = col(i); ctx.fill(); if (n > 1) { ctx.lineWidth = 2; ctx.strokeStyle = bg; ctx.stroke(); }
+          ctx.save(); ctx.rotate(a + seg / 2);
+          ctx.font = `500 ${Math.max(14, Math.min(30, 300 / Math.sqrt(n) / 2.2, R * seg * 0.45))}px system-ui, sans-serif`;
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+          ctx.fillText(this.fit(ctx, names[i], R - 70), R - 22, 0); ctx.restore();
+        }
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.fillStyle = bg; ctx.fill(); ctx.restore(); return;
+      }
+      const horiz = this.style === 'horizontal', S = horiz ? 190 : 84, L = horiz ? W : H, base = Math.floor(this.pos), sel = mod(Math.round(this.pos), n);
+      ctx.fillStyle = dark ? '#1c1917' : '#f1f0ec'; ctx.fillRect(0, 0, W, H);
+      ctx.font = '500 22px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (let k = base - 6; k <= base + 7; k++) {
+        const i = mod(k, n), c0 = L / 2 + (k - this.pos) * S, isSel = Math.round(this.pos) === k;
+        const x = horiz ? c0 - S / 2 + 6 : 34, y = horiz ? 34 : c0 - S / 2 + 5, w = horiz ? S - 12 : W - 68, h = horiz ? H - 68 : S - 10;
+        ctx.fillStyle = isSel ? '#33576b' : (dark ? '#292524' : '#e7e5df'); ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+        ctx.fillStyle = isSel ? '#fff' : (dark ? '#d6d3d1' : '#57534e'); ctx.fillText(this.fit(ctx, names[i], w - 24), x + w / 2, y + h / 2);
+      }
+      ctx.fillStyle = NEEDLE; ctx.strokeStyle = NEEDLE; ctx.lineWidth = 3;
+      const tri = (tx, ty, dx, dy) => { ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - dy * 11 - dx * 18, ty + dx * 11 - dy * 18); ctx.lineTo(tx + dy * 11 - dx * 18, ty - dx * 11 - dy * 18); ctx.closePath(); ctx.fill(); };
+      if (horiz) { [[0, 1], [1, -1]].forEach(([s, d]) => { const y = s ? H : 0; ctx.beginPath(); ctx.moveTo(W / 2, y); ctx.lineTo(W / 2, y + d * 14); ctx.stroke(); tri(W / 2, s ? H - 32 : 32, 0, s ? -1 : 1); }); }
+      else { [[0, 1], [1, -1]].forEach(([s, d]) => { const x = s ? W : 0; ctx.beginPath(); ctx.moveTo(x, H / 2); ctx.lineTo(x + d * 14, H / 2); ctx.stroke(); tri(s ? W - 32 : 32, H / 2, s ? -1 : 1, 0); }); }
+    }
+  };
+}
+</script>
+</body>
+</html>
